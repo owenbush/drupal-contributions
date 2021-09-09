@@ -1,10 +1,12 @@
-name: drupal-contributions
+name: recurring-events-testing
 recipe: drupal9
 config:
   webroot: web
-
 services:
   appserver:
+    webroot: web
+    config:
+      php: .vscode/php.ini
     build_as_root:
       # Note that you will want to use the script for the major version of node you want to install
       # See: https://github.com/nodesource/distributions/blob/master/README.md#installation-instructions
@@ -17,7 +19,7 @@ services:
       - yarn install --non-interactive --cwd /app/web/core
     overrides:
       environment:
-        SIMPLETEST_BASE_URL: "https://drupal-contributions.lndo.site/"
+        SIMPLETEST_BASE_URL: "https://recurring-events-testing.lndo.site/"
         SIMPLETEST_DB: "sqlite://localhost/tmp/db.sqlite"
         MINK_DRIVER_ARGS_WEBDRIVER: '["chrome", {"browserName":"chrome","chromeOptions":{"args":["--disable-gpu","--headless", "--no-sandbox"]}}, "http://chrome:9515"]'
         # Nightwatch
@@ -40,7 +42,7 @@ tooling:
   drush:
     service: appserver
     cmd:
-      web/vendor/drush/drush/drush --root=/app/web --uri=https://drupal-contributions.lndo.site
+      /app/web/vendor/drush/drush/drush --root=/app/web --uri=https://recurring-events-testing.lndo.site
   si:
     service: appserver
     description: Install Drupal
@@ -71,6 +73,16 @@ tooling:
     user: www-data
     cmd:
       - appserver: php /app/web/vendor/bin/phpunit -c /app/phpunit.xml
+  xdebug-on:
+    service: appserver
+    description: Enable xdebug for apache.
+    cmd: "docker-php-ext-enable xdebug && /etc/init.d/apache2 reload"
+    user: root
+  xdebug-off:
+    service: appserver
+    description: Disable xdebug for apache.
+    cmd: "rm /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini && /etc/init.d/apache2 reload"
+    user: root
 
   core-check:
     service: appserver
@@ -92,3 +104,6 @@ events:
     - appserver: php /app/scripts/get-drupal.php
   post-rebuild:
     - appserver: /app/scripts/rebuild.sh
+    - appserver: composer install
+    - appserver: cd /app/web/modules/contrib && rm -rf recurring_events && git clone --branch '2.0.x' git@git.drupal.org:project/recurring_events.git
+    - appserver: cd /app/web/core && git reset --hard origin/9.3.x && git clean -df
